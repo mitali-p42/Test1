@@ -3,6 +3,8 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { User } from './users/user.entity';
 import { InterviewProfile } from './interview-profile/interview-profile.entity';
+import { InterviewSession } from './interview/entities/interview-session.entity';  // 👈 NEW
+import { InterviewQA } from './interview/entities/interview-qa.entity';
 
 export const typeOrmConfig = (config: ConfigService): TypeOrmModuleOptions => ({
   type: 'postgres',
@@ -12,5 +14,5 @@ export const typeOrmConfig = (config: ConfigService): TypeOrmModuleOptions => ({
   synchronize: false,                  // DO NOT let TypeORM alter tables
   migrationsRun: false,
   autoLoadEntities: false,             // avoid loading a duplicate/old User entity
-  entities: [User, InterviewProfile],  // explicitly list entities we want
+  entities: [User, InterviewProfile, InterviewSession, InterviewQA],  // explicitly list entities we want
 });

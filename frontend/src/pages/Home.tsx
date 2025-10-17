@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 type Profile = {
   role: string | '—';
   interviewType: string | '—';
   yearsOfExperience: number | string | '—';
 };
-
+const navigate = useNavigate();
 export default function Home() {
   const { user, logout } = useAuth();
 
@@ -64,7 +65,7 @@ export default function Home() {
   }, [token]); // 👈 runs again when token appears
 
   function handleConfirm() {
-    alert('✅ Interview confirmed. We’ll get you started!');
+    navigate('/interview', { state: { profile } });
   }
 
   return (
