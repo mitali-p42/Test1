@@ -17,8 +17,9 @@ import { JwtAuthGuard } from '../auth/jwt.guard';
 import { InterviewService } from './interview.service';
 import { Response } from 'express';
 
-type AuthedRequest = { user: { sub: string; email: string } };
-
+// type AuthedRequest = { user: { sub: string; email: string } };
+type RequestUser = { id: string; email: string };
+type AuthedRequest = { user: RequestUser };
 @Controller('interview')
 @UseGuards(JwtAuthGuard)
 export class InterviewController {
@@ -31,7 +32,7 @@ export class InterviewController {
     @Body() body: { role: string; interviewType: string; yearsOfExperience?: number },
   ) {
     return this.service.createSession(
-      req.user.sub,
+      req.user.id,
       body.role,
       body.interviewType,
       body.yearsOfExperience,
