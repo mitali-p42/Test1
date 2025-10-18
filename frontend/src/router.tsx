@@ -2,8 +2,8 @@ import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import Interview from './pages/Interview'; 
 import { useAuth } from './auth/AuthContext';
-import Interview from './pages/Interview';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
