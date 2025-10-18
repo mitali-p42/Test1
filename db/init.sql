@@ -74,4 +74,4 @@ CREATE TABLE IF NOT EXISTS interview_qa (
 
 CREATE INDEX IF NOT EXISTS idx_interview_sessions_user_id ON interview_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_interview_sessions_status ON interview_sessions(status);
-CREATE INDEX IF NOT EXISTS idx_interview_qa_session_id ON interview_qa(session_id);docker-compose up postgres -d
+CREATE INDEX IF NOT EXISTS idx_interview_qa_session_id ON interview_qa(session_id);
