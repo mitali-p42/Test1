@@ -71,16 +71,7 @@ CREATE TABLE IF NOT EXISTS interview_qa (
     FOREIGN KEY (session_id) REFERENCES interview_sessions (session_id) ON DELETE CASCADE,
   UNIQUE(session_id, question_number)
 );
+
 CREATE INDEX IF NOT EXISTS idx_interview_sessions_user_id ON interview_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_interview_sessions_status ON interview_sessions(status);
-CREATE INDEX IF NOT EXISTS idx_interview_qa_session_id ON interview_qa(session_id);
--- -- Seed user (bcrypt('password'))
--- INSERT INTO users (email, password_hash)
--- VALUES ('a@gmail.com', '$2b$10$KIX/1u9KX9H2u5x3bQ8yEetm2q9c8yS0q1m3cUoC2Tqk7Vz3m7m6S')
--- ON CONFLICT (email) DO NOTHING;
-
--- -- Seed one interview profile (no ON CONFLICT needed)
--- INSERT INTO interview_profiles (user_id, email, role, interview_type, years_of_experience)
--- SELECT u.id, u.email, 'product manager', 'technical', 4.0
--- FROM users u
--- WHERE u.email = 'a@gmail.com';
+CREATE INDEX IF NOT EXISTS idx_interview_qa_session_id ON interview_qa(session_id);docker-compose up postgres -d
