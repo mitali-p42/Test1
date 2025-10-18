@@ -16,18 +16,44 @@ export default function VoiceInterview({ sessionId, profile, onComplete }: Props
   const [transcript, setTranscript] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [silenceTimer, setSilenceTimer] = useState<number | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isRecordingRef = useRef(false); // ✅ Ref to track recording state
+  const animationFrameRef = useRef<number | null>(null); // ✅ Track animation frame
 
   const token = localStorage.getItem('token');
   const API_BASE = import.meta.env.VITE_API_BASE;
 
-  // Fetch and play first question
+  useEffect(() => {
+    console.log('Browser audio support:');
+    const types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'];
+    types.forEach(type => {
+      console.log(`${type}: ${MediaRecorder.isTypeSupported(type)}`);
+    });
+  }, []);
+
+  function getSupportedMimeType(): string {
+    const types = [
+      'audio/mp4',
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+    ];
+
+    for (const type of types) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        console.log('✅ Using MIME type:', type);
+        return type;
+      }
+    }
+
+    console.warn('⚠️ No preferred MIME type supported, using browser default');
+    return '';
+  }
+
   async function fetchNextQuestion() {
     setIsProcessing(true);
     try {
@@ -40,17 +66,21 @@ export default function VoiceInterview({ sessionId, profile, onComplete }: Props
         body: JSON.stringify({ yearsOfExperience: profile.yearsOfExperience }),
       });
 
+      if (!res.ok) {
+        const error = await res.text();
+        console.error('Failed to fetch question:', error);
+        throw new Error('Failed to load question');
+      }
+
       const data = await res.json();
       setCurrentQuestion(data.question);
       setQuestionNumber(data.questionNumber);
 
-      // Play question audio
       const audioBuffer = Uint8Array.from(atob(data.audioBase64), c => c.charCodeAt(0));
       const blob = new Blob([audioBuffer], { type: 'audio/mp3' });
       const audio = new Audio(URL.createObjectURL(blob));
       
       audio.onended = () => {
-        // Auto-start recording after question finishes
         setTimeout(() => startRecording(), 500);
       };
       
@@ -63,23 +93,20 @@ export default function VoiceInterview({ sessionId, profile, onComplete }: Props
     }
   }
 
-  // Start recording with silence detection
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Setup audio context for silence detection
       audioContextRef.current = new AudioContext();
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 2048;
       source.connect(analyserRef.current);
 
-      // Setup MediaRecorder
-      mediaRecorderRef.current = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus',
-      });
-
+      const mimeType = getSupportedMimeType();
+      const options: MediaRecorderOptions = mimeType ? { mimeType } : {};
+      
+      mediaRecorderRef.current = new MediaRecorder(stream, options);
       audioChunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = (e) => {
@@ -89,35 +116,38 @@ export default function VoiceInterview({ sessionId, profile, onComplete }: Props
       };
 
       mediaRecorderRef.current.onstop = handleRecordingStop;
-
-      mediaRecorderRef.current.start(100); // Record in 100ms chunks
+      mediaRecorderRef.current.start(100);
+      
       setIsRecording(true);
+      isRecordingRef.current = true; // ✅ Update ref
       setTranscript('Listening...');
 
-      // Start silence detection
       detectSilence();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Recording failed:', err);
-      alert('Microphone access denied');
+      alert(`Microphone error: ${err.message}`);
     }
   }
 
-  // Detect silence and auto-stop after 2 seconds
+  // ✅ FIXED: Improved silence detection using ref
   function detectSilence() {
     if (!analyserRef.current) return;
 
     const bufferLength = analyserRef.current.fftSize;
     const dataArray = new Uint8Array(bufferLength);
     let silenceStart: number | null = null;
-    const SILENCE_THRESHOLD = 20; // Adjust based on testing
+    const SILENCE_THRESHOLD = 15; // Lower = more sensitive
     const SILENCE_DURATION = 2000; // 2 seconds
 
     const checkAudio = () => {
-      if (!isRecording || !analyserRef.current) return;
+      // ✅ Use ref instead of state
+      if (!isRecordingRef.current || !analyserRef.current) {
+        console.log('Stopping silence detection');
+        return;
+      }
 
       analyserRef.current.getByteTimeDomainData(dataArray);
 
-      // Calculate audio level
       let sum = 0;
       for (let i = 0; i < bufferLength; i++) {
         const value = Math.abs(dataArray[i] - 128);
@@ -125,44 +155,65 @@ export default function VoiceInterview({ sessionId, profile, onComplete }: Props
       }
       const average = sum / bufferLength;
 
+      // Log audio level occasionally for debugging
+      if (Math.random() < 0.1) {
+        console.log('Audio level:', average.toFixed(2));
+      }
+
       if (average < SILENCE_THRESHOLD) {
         if (!silenceStart) {
           silenceStart = Date.now();
+          console.log('Silence started');
         } else if (Date.now() - silenceStart > SILENCE_DURATION) {
-          // 2 seconds of silence detected
-          console.log('Silence detected, stopping recording');
+          console.log('2 seconds of silence detected, stopping recording');
           stopRecording();
           return;
         }
       } else {
+        if (silenceStart) {
+          console.log('Sound detected, resetting silence timer');
+        }
         silenceStart = null;
       }
 
-      requestAnimationFrame(checkAudio);
+      animationFrameRef.current = requestAnimationFrame(checkAudio);
     };
 
     checkAudio();
   }
 
-  // Stop recording manually or via silence
+  // ✅ FIXED: Proper cleanup
   function stopRecording() {
-    if (mediaRecorderRef.current && isRecording) {
+    console.log('Stopping recording...');
+    isRecordingRef.current = false; // ✅ Update ref first
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      setIsRecording(false);
     }
+    
+    setIsRecording(false);
   }
 
-  // Process recorded audio
   async function handleRecordingStop() {
     setIsProcessing(true);
     setTranscript('Processing your answer...');
 
-    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+    const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
     
-    // Send to backend
+    console.log('Audio blob size:', audioBlob.size, 'bytes');
+    console.log('MIME type:', mimeType);
+    
+    const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+    
     const formData = new FormData();
-    formData.append('audio', audioBlob, 'answer.webm');
+    formData.append('audio', audioBlob, `answer.${extension}`);
     formData.append('questionNumber', questionNumber.toString());
     formData.append('yearsOfExperience', profile.yearsOfExperience.toString());
 
@@ -175,13 +226,21 @@ export default function VoiceInterview({ sessionId, profile, onComplete }: Props
         body: formData,
       });
 
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Backend error:', errorText);
+        throw new Error(`Server error: ${res.status}`);
+      }
+
       const data = await res.json();
-      setTranscript(data.transcript);
+      console.log('Response data:', data);
+      
+      setTranscript(data.transcript || 'No transcript received');
 
-      // Show evaluation briefly
-      alert(`Score: ${data.evaluation.score}/100\n\n${data.evaluation.feedback}`);
+      if (data.evaluation) {
+        alert(`Score: ${data.evaluation.score}/100\n\n${data.evaluation.feedback}`);
+      }
 
-      // Move to next question after 2 seconds
       setTimeout(() => {
         if (questionNumber < 5) {
           fetchNextQuestion();
@@ -189,9 +248,9 @@ export default function VoiceInterview({ sessionId, profile, onComplete }: Props
           completeInterview();
         }
       }, 2000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to submit answer:', err);
-      alert('Failed to process answer');
+      alert(`Failed to process answer: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -249,7 +308,7 @@ export default function VoiceInterview({ sessionId, profile, onComplete }: Props
               }}
             />
             <p style={{ fontSize: 16, color: '#666' }}>
-              Recording... (Speak naturally, will auto-stop after 2s silence)
+              🎤 Recording... (will auto-stop after 2s silence)
             </p>
             <button
               onClick={stopRecording}
@@ -269,7 +328,7 @@ export default function VoiceInterview({ sessionId, profile, onComplete }: Props
         )}
 
         {isProcessing && (
-          <p style={{ fontSize: 16, color: '#666' }}>Processing...</p>
+          <p style={{ fontSize: 16, color: '#666' }}>⏳ Processing...</p>
         )}
       </div>
 
