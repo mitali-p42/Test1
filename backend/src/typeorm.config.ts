@@ -3,8 +3,8 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { User } from './users/user.entity';
 import { InterviewProfile } from './interview-profile/interview-profile.entity';
-import { InterviewSession } from './interview/entities/interview-session.entity';  // 👈 NEW
-import { InterviewQA } from './interview/entities/interview-qa.entity';
+import { InterviewSession } from './interview/interview-session.entity';  // 👈 NEW
+import { InterviewQA } from './interview/interview-qa.entity';  
 
 export const typeOrmConfig = (config: ConfigService): TypeOrmModuleOptions => ({
   type: 'postgres',
