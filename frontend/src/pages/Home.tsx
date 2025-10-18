@@ -7,9 +7,10 @@ type Profile = {
   interviewType: string | '—';
   yearsOfExperience: number | string | '—';
 };
-const navigate = useNavigate();
+
 export default function Home() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [profile, setProfile] = useState<Profile>({
     role: '—',
@@ -64,6 +65,7 @@ export default function Home() {
     };
   }, [token]); // 👈 runs again when token appears
 
+  
   function handleConfirm() {
     navigate('/interview', { state: { profile } });
   }
